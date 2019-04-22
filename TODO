@@ -1,0 +1,32 @@
+In no particular order, here's a (probably incomplete) list of things
+I want to add to fwx.
+
+Add a version field to the data written to the CSV file. 
+Done v0.4
+
+Remove all derived data (faked wind gust & dew point) from the CSV 
+file. (maybe)
+
+Provide a program which will read the CSV file, compute non-measured 
+data, and write a separate CSV file out with more complete data. 
+
+Add all the other data provided by the VP in the LOOP packet to the 
+CSV file, currently I only log what the sensors in the default VP 
+package provide (no solar radiation, UV, leaf & soil wetness, etc). 
+
+Add LOOP2 data
+
+Fire off a separate thread or process to run the LOOP command with a 
+large count and write the data to a shared memory segment.  A second 
+thread will then periodically read the data, validate it, and log it. 
+Tried this for v0.4, decided it was not the right aproach
+
+Periodically set the Vantage Pro's clock to the PC's clock. 
+
+Provide a command to read and write config & calibration factors from VP.
+
+Provide some scripts which process the CSV files and prepare input to
+gnuplot (or some other graphing package). 
+
+Add a configuration file with default values for things like log
+files, sample rates, serial port, WU login info, etc...

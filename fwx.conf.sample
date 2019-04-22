@@ -1,0 +1,10 @@
+# Config file for fwx
+#
+# Local parameters
+FWXDEV /dev/ttyU0
+FWXLOGDIR /var/fwx
+FWXINTERVAL 10
+
+# Weather Underground parameters
+WUSTATION <STATION NAME HERE>
+WUPASSWORD <PASSWORD HERE>
