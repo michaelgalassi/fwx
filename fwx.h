@@ -55,6 +55,7 @@ typedef struct wxdat {
     wxd_t rainday;              /* rain today */
     wxd_t rainmonth;            /* rain this month */
     wxd_t rainyear;             /* rain this year */
+    wxd_t solar;                /* solar radiation */
 } wxdat_t;
 
 #define WXD_GETFLAGS(x)         ((x).flags)

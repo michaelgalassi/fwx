@@ -1,4 +1,8 @@
-FWX data file format (v0.4) - 2003-09-30
+FWX data file format (v0.5) - 2019-08-20
+
+Differences from v0.4 - 2003-09-30
+ - Minor version bump from 4 to 5
+ - Addition of Solar radiation field
 
 FWX's data file is a coma separated list of values read from the weather
 station.  The fields are:
@@ -7,7 +11,7 @@ Major version nubmer - integer
 Currently 0
 
 Minor version number - integer
-Currently 4
+Currently 5
 
 Time stamp in seconds past the epoch - integer
 The epoch is midnight (UTC) of the 1st of January of 1970.  This value
@@ -16,13 +20,11 @@ can be converted to a readable format with the -r option to date, eg:
     Tue Sep 30 00:03:22 PDT 2003
     $
 
-Barometric pressure measured in inches of mercury - float3
+Barometric pressure measured (in inches of mercury) - float3
 
-Instantaneous wind speed in miles/hour - integer
+Instantaneous wind speed (in miles/hour) - integer
 
-Wind direction in degrees - integer
-
-Range of 0 to 360 degrees
+Wind direction (in degrees (0 - 360)) - integer
 
 Average wind speed (over the last 10 minutes) - integer
 
@@ -44,6 +46,8 @@ Cumulative rain for this month (in) - float2
 
 Cumulative rain for this year (in) - float2
 
+Solar radiation (w/m3) - integer
+
 float1 means a floating point value with one significant digit to the
 right of the decimal point
 
@@ -59,6 +63,6 @@ humidity.  See the routine wxcalcdewpoint() in fwx.c.
 These are trivial to read with a shell script, sh, ksh, & bash can use
 something like:
 
-while IFS="," read vermaj vermin time barom windspeed winddir avgwind tempin tempout dewpoint humin humout rainrate rainday rainmonth rainyear junk; do
+while IFS="," read vermaj vermin time barom windspeed winddir avgwind tempin tempout dewpoint humin humout rainrate rainday rainmonth rainyear solar junk; do
    # some processing here
 done < <logfile>

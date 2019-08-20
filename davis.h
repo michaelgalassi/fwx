@@ -27,10 +27,10 @@
  * For whatever reason the people who designed and implemented this
  * interface didn't feel the need to consider alignment or byte
  * ordering issues.  They also ignored the natural tendency software
- * people have to size things as powers of two.
+ * people have to align things on power of two boundaries.
  *
  * The uint16_t elements will want to be byte reversed for use on
- * some boxen, the ia32 is fine though.
+ * some boxen, the ia32 & amd64 are fine though.
  */
 #pragma pack(1)
 typedef struct vploopdata {

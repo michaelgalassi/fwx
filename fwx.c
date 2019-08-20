@@ -35,7 +35,7 @@
 #include "davis.h"
 
 #define VERSION_MAJ 0
-#define VERSION_MIN 4
+#define VERSION_MIN 5
 #define CONFIG "/usr/local/etc/fwx.conf"
 
 #define USAGE "usage:\n%s [-b] [-i <interval>] -l <logdir> -d <device>\n"
@@ -329,6 +329,13 @@ wxlog(char *wxlogdir, wxdat_t *wxdp)
     }
     if (WXD_ISVALID(wxdp->rainyear)) {
         s += sprintf(s, "%.2f,", WXD_GETDAT(wxdp->rainyear, floatd));
+    } else {
+        *s++ = ','; *s++ = '\0';
+    }
+    if (WXD_ISVALID(wxdp->solar)) {
+        s += sprintf(s, "%d,", WXD_GETDAT(wxdp->solar, intd));
+    } else {
+        *s++ = ','; *s++ = '\0';
     }
 
     (void)fprintf(file, "%s\n", str);
@@ -551,6 +558,13 @@ cvtvploop2fwx(vploopdata_t *ld, wxdat_t *wxdatp)
         WXD_SETDAT(wxdatp->rainrate, (float)tmp / 100, floatd);
         WXD_SETFLAGS(wxdatp->rainrate, WXD_VALID|WXD_ENGLISH|2);
     }
+    WXD_SETUNITS(wxdatp->solar, "w/m2");
+    tmp = get_d_16(ld->solarRad);
+    if (tmp != SIXTEEN_ONES) {
+        WXD_SETDAT(wxdatp->solar, tmp, intd);
+        /* w/m2 sounds metric... */
+        WXD_SETFLAGS(wxdatp->solar, WXD_VALID|WXD_METRIC|2);
+    }
     WXD_SETUNITS(wxdatp->rainday, "in");
     tmp =  get_d_16(ld->rainDay);
     if (tmp != SIXTEEN_ONES) {
@@ -623,6 +637,9 @@ wxgetloop(int fd, wxdat_t *wxdatp)
     cvtvploop2fwx(&ld, wxdatp);
 }
 
+/*
+ * https://feedback.weather.com/customer/en/portal/articles/2924682-pws-upload-protocol?b_id=17298
+ */
 static void
 wxsendwu(wxdat_t *wxdp)
 {
@@ -666,6 +683,9 @@ wxsendwu(wxdat_t *wxdp)
     }
     if (WXD_ISVALID(wxdp->outdoordewpoint)) {
         s += sprintf(s, "&dewptf=%.1f", WXD_GETDAT(wxdp->outdoordewpoint, floatd));
+    }
+    if (WXD_ISVALID(wxdp->solar)) {
+        s += sprintf(s, "&solarradiation=%d", WXD_GETDAT(wxdp->solar, intd));
     }
     *s++ = '\''; *s = '\0';
     (void)system(str);
