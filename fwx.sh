@@ -17,7 +17,7 @@ rcvar=fwx_enable
 command="/usr/local/bin/fwx"
 
 fwx_enable=${fwx_enable:-"NO"}
-fwx_flags=${fwx_flags:-"-b -l /var/fwx -d /dev/ttyU0 -i 5"}
+fwx_flags=${fwx_flags:-"-b -l /var/fwx -d /dev/ttyU0 -i 20"}
 
 load_rc_config $name
 run_rc_command "$1"

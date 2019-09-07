@@ -205,7 +205,7 @@ wxread(int fd, void *buf, size_t len, int timeout)
 }
 
 int
-wxflush(fd)
+wxflush(int fd)
 {
     struct termios termios;
 
@@ -222,7 +222,7 @@ wxflush(fd)
 }
 
 int
-wxwakeup(fd)
+wxwakeup(int fd)
 {
     ssize_t rc;
     char resp[2];

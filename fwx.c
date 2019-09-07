@@ -30,6 +30,10 @@
 #include <errno.h>
 #include <math.h>
 #include <ctype.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "fwx.h"
 #include "davis.h"
@@ -54,11 +58,15 @@ static int wxident(int fd);
 static void wxlog(char *wxlogdir, wxdat_t *wxdat);
 static void wxgetloop(int fd, wxdat_t *wxdat);
 static void wxsendwu(wxdat_t *wxdp);
+static void wxsendcwop(wxdat_t *wxdp);
 
-static char wustation[64];
-static char wupassword[64];
 static char fwxdev[64];
 static char fwxlogdir[64];
+static char wustation[64];
+static char wupassword[64];
+static char cwopsvr[64];
+static char cwopuser[64];
+static char cwoploc[64];
 static int fwxinterval = 30;     /* default to sampling every 30 sec */
 
 static void
@@ -112,7 +120,7 @@ main(int argc, char **argv)
     int wxfd;
     int c;
     struct stat st;
-    int background = 0;         /* foreground by default */
+    int background;           /* foreground by default */
     char str[128];
     char tmpstr[8];
     char *s;
@@ -128,12 +136,6 @@ main(int argc, char **argv)
             while (isspace(*s)) {
                 ++s;            /* clean up leading cruft */
             }
-            if (chkvar(s, "WUSTATION", wustation, sizeof(wustation)-1)) {
-                continue;
-            }
-            if (chkvar(s, "WUPASSWORD", wupassword, sizeof(wupassword)-1)) {
-                continue;
-            }
             if (chkvar(s, "FWXLOGDIR", fwxlogdir, sizeof(fwxlogdir)-1)) {
                 continue;
             }
@@ -144,11 +146,27 @@ main(int argc, char **argv)
                 fwxinterval = (int)strtol(tmpstr, (char **)0, 0);
                 continue;
             }
+            if (chkvar(s, "WUSTATION", wustation, sizeof(wustation)-1)) {
+                continue;
+            }
+            if (chkvar(s, "WUPASSWORD", wupassword, sizeof(wupassword)-1)) {
+                continue;
+            }
+            if (chkvar(s, "CWOPSVR", cwopsvr, sizeof(cwopsvr)-1)) {
+                continue;
+            }
+            if (chkvar(s, "CWOPUSER", cwopuser, sizeof(cwopuser)-1)) {
+                continue;
+            }
+            if (chkvar(s, "CWOPLOC", cwoploc, sizeof(cwoploc)-1)) {
+                continue;
+            }
             /* ignore any line that doesn't match */
         }
         fclose(fp);
     }
 
+    background = 0;
     while ((c = getopt(argc, argv, "d:i:l:b")) != -1) {
         switch (c) {
         case 'd':
@@ -231,6 +249,7 @@ main(int argc, char **argv)
         wxgetloop(wxfd, &wxdat);
         wxlog(fwxlogdir, &wxdat);
         wxsendwu(&wxdat);
+        wxsendcwop(&wxdat);
         /* wait for my itimer to expire */
         (void)select(0, (fd_set *)0, (fd_set *)0, (fd_set *)0, (struct timeval *)0);
     }
@@ -598,15 +617,14 @@ wxgetloop(int fd, wxdat_t *wxdatp)
     int i;
     int rc;
 
-    i = 0;
-    do {
-        if (++i > 4) {
-            return;
-        }
+    for (i = 0; i < 4; ++i) {
 #ifdef DEBUG_WXLOOP
         fprintf(stdout, "wxgetloop - wakeup attempt %d\n", i);
 #endif /*DEBUG_WXLOOP*/
-    } while (wxwakeup(fd) != 0);
+        if (wxwakeup(fd) == 0) {
+            break;
+        }
+    }
 
     if (wxcmd(fd, VPLOOPCMD) != 0) {
         return;
@@ -689,6 +707,161 @@ wxsendwu(wxdat_t *wxdp)
     }
     *s++ = '\''; *s = '\0';
     (void)system(str);
+}
+
+static void
+waitforsrv(int s)
+{
+    fd_set rfds;
+    int rc;
+    char str[512];
+
+    FD_ZERO(&rfds);
+    FD_SET(s, &rfds);
+    switch (rc = select(s + 1, &rfds, (fd_set *)0, (fd_set *)0, (struct timeval *)0)) {
+    case 0:
+	printf("select returned %d???\n", rc);
+	break;
+    case -1:
+	perror("select");
+	break;
+    case 1:
+	rc = read(s, str, sizeof(str));
+#ifdef DEBUG_CWOP
+        str[rc] = '\0';
+	printf("got \"%s\"\n", str);
+#endif /*DEBUG_CWOP*/
+	break;
+    default:
+	printf("select returned %d???\n", rc);
+	break;
+    }
+}
+
+/*
+ * http://www.wxqa.com/faq.html
+ */
+static void
+wxsendcwop(wxdat_t *wxdp)
+{
+    static time_t lasthere;
+    time_t now;
+    struct sockaddr_in sin;
+    struct hostent *hep;
+    struct tm *tm;
+    int tmp;
+    int s;
+    int len;
+    char str[256];
+    char *sp;
+
+    if (!*cwopsvr || !*cwopuser || !*cwoploc) {
+        /* don't bother if we don't have the server, login, and location */ 
+#ifdef DEBUG_CWOP
+        printf("not logging to CWOP svr: %s user: %s location: %s\n",
+               cwopsvr, cwopuser, cwoploc);
+#endif
+        return;
+    }
+    now = time((time_t *)0);
+    if (now - lasthere < 5 * 60) {
+        /* don't do this more than every 5 minutes */
+        return;
+    }
+    /* open connection to port 14580 on the server */
+    memset((void *)&sin, 0, sizeof(sin));
+    sin.sin_family = AF_INET;
+    sin.sin_port = htons(14580);
+    if ((hep = gethostbyname(cwopsvr)) != (struct hostent *)0) {
+        in_addr_t *in = (in_addr_t *)hep->h_addr_list[0];
+        sin.sin_addr.s_addr = *in;
+    } else {
+        sin.sin_addr.s_addr = inet_addr(cwopsvr);
+    }
+    if (sin.sin_addr.s_addr == INADDR_NONE) {
+#ifdef DEBUG_CWOP
+        printf("can't figure out the server address\n");
+#endif /*DEBUG_CWOP*/
+        return;
+    }
+#ifdef DEBUG_CWOP
+        printf("CWOP server address 0x%08x\n", sin.sin_addr.s_addr);
+#endif /*DEBUG_CWOP*/
+    if ((s = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
+#ifdef DEBUG_CWOP
+        perror("socket");
+#endif /*DEBUG_CWOP*/
+        return;
+    }
+    if (connect(s, (const struct sockaddr *)&sin, sizeof(sin)) == -1) {
+        perror("connect");
+        (void)close(s);
+        return;
+    }
+    /* think about blocking vs non-blocking so we can read what we're
+     * getting back for debug purposes
+     */
+    waitforsrv(s);
+    /* "login" by sending user, passcode, and software id */
+    if ((len = snprintf(str, sizeof(str), "user %s pass -1 vers fwx %d.%d\r\n",
+                        cwopuser, VERSION_MAJ, VERSION_MIN)) < 0) {
+        return;
+    }
+    if (write(s, str, len) == -1) {
+	perror("write login");
+        (void)close(s);
+        return;
+    }
+    /* build up packet */
+    sp = stpcpy(str, cwopuser);
+    tm = gmtime(&wxdp->time);
+    sp += strftime(sp, 32, ">APRS,TCPIP*:@%d%H%M", tm);
+    sp += sprintf(sp, "z%s", cwoploc);
+    sp += sprintf(sp, "_%03d/%03dg%03d", wxdp->windcur.direction,
+		  wxdp->windcur.speed, wxdp->windgust.speed);
+    tmp = (int)nearbyintf(WXD_GETDAT(wxdp->outdoortemp, floatd));
+    if (tmp < 0) {
+        sp += sprintf(sp, "t-%02d", -tmp);
+    } else {
+        sp += sprintf(sp, "t%03d", tmp);
+    }
+#ifdef NOTYET
+    sp += sprintf(sp, "r%03d", wxdp->rainhour);
+#endif /*NOTYET*/
+    /* until I get these figured out */
+    sp += sprintf(sp, "r...p...");
+    /* rain today in one hundredths of an inch */
+    tmp = (int)nearbyintf(WXD_GETDAT(wxdp->rainday, floatd)*100);
+    sp += sprintf(sp, "P%03d", tmp);
+    /* humidity in percent, 2 digits, 100 is special cased as 00 */
+    tmp = (int)nearbyintf(WXD_GETDAT(wxdp->outdoorhum, floatd));
+    sp += sprintf(sp, "h%02d", tmp > 99 ? 0 : tmp);
+    /* pressure is in millibar * 10 rather than in of Hg */
+    tmp = (int)nearbyintf(WXD_GETDAT(wxdp->barometer, floatd) * 33.86389 * 10);
+    sp += sprintf(sp, "b%05d", tmp);
+    /* solar radiation in w/m^2 */
+    if ((tmp = WXD_GETDAT(wxdp->solar, intd)) > 999) {
+        sp += sprintf(sp, "l%03d", tmp - 1000);
+    } else {
+        sp += sprintf(sp, "L%03d", tmp);
+    }
+    /* fwx software */
+    sp += sprintf(sp, "wfwx\r\n");
+    /* when server's ready */
+    waitforsrv(s);
+    /* send packet */
+#ifdef DEBUG_CWOP
+    printf("\"%s\"\n", str);
+#endif /*DEBUG_CWOP*/
+    if (write(s, str, strlen(str)) == -1) {
+        perror("write packet");
+        (void)close(s);
+        return;
+    }
+    /* close connection */
+    (void)close(s);
+    lasthere = now;
+    return;
 }
 
 static int

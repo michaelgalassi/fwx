@@ -3,8 +3,16 @@
 # Local parameters
 FWXDEV /dev/ttyU0
 FWXLOGDIR /var/fwx
-FWXINTERVAL 10
+FWXINTERVAL 20
 
 # Weather Underground parameters
+# if you leave these out fwx won't try to send to WU
 WUSTATION <STATION NAME HERE>
 WUPASSWORD <PASSWORD HERE>
+
+# CWOP parameters, get your values from
+# http://www.wxqa.com/faq.html
+# if you leave these out fwx won't try to send to CWOP
+CWOPSVR cwop.aprs.net
+CWOPUSER <your CWOP ID>
+CWOPLOC <your coordinates>
