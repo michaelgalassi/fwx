@@ -10,7 +10,7 @@ CONFIG=fwx.conf.sample
 RC=fwx.sh
 SRCS=fwx.c support.c crc.c fwx.h davis.h
 OBJS=fwx.o support.o crc.o
-CFLAGS=-g -O2 -std=c11 -Wall -Wextra -Werror -pedantic -DIF_SPEED=19200 -DVP -DDEBUG_CWOP
+CFLAGS=-g -O2 -std=c11 -Wall -Wextra -Werror -pedantic -DIF_SPEED=19200 -DVP
 LDFLAGS=-lm
 
 ${BINARY}: ${OBJS}

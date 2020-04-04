@@ -10,6 +10,11 @@ FWXINTERVAL 20
 WUSTATION <STATION NAME HERE>
 WUPASSWORD <PASSWORD HERE>
 
+# AERIS weather parameters
+# if you leave these out fwx won't try to send to AERIS
+AERISSTATION <STATION NAME HERE>
+AERISPASSWORD <PASSWORD HERE>
+
 # CWOP parameters, get your values from
 # http://www.wxqa.com/faq.html
 # if you leave these out fwx won't try to send to CWOP

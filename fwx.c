@@ -59,11 +59,14 @@ static void wxlog(char *wxlogdir, wxdat_t *wxdat);
 static void wxgetloop(int fd, wxdat_t *wxdat);
 static void wxsendwu(wxdat_t *wxdp);
 static void wxsendcwop(wxdat_t *wxdp);
+static void wxsendaeris(wxdat_t *wxdp);
 
 static char fwxdev[64];
 static char fwxlogdir[64];
 static char wustation[64];
 static char wupassword[64];
+static char aerisstation[64];
+static char aerispassword[64];
 static char cwopsvr[64];
 static char cwopuser[64];
 static char cwoploc[64];
@@ -150,6 +153,12 @@ main(int argc, char **argv)
                 continue;
             }
             if (chkvar(s, "WUPASSWORD", wupassword, sizeof(wupassword)-1)) {
+                continue;
+            }
+            if (chkvar(s, "AERISSTATION", aerisstation, sizeof(aerisstation)-1)) {
+                continue;
+            }
+            if (chkvar(s, "AERISPASSWORD", aerispassword, sizeof(aerispassword)-1)) {
                 continue;
             }
             if (chkvar(s, "CWOPSVR", cwopsvr, sizeof(cwopsvr)-1)) {
@@ -250,6 +259,7 @@ main(int argc, char **argv)
         wxlog(fwxlogdir, &wxdat);
         wxsendwu(&wxdat);
         wxsendcwop(&wxdat);
+        wxsendaeris(&wxdat);
         /* wait for my itimer to expire */
         (void)select(0, (fd_set *)0, (fd_set *)0, (fd_set *)0, (struct timeval *)0);
     }
@@ -862,6 +872,61 @@ wxsendcwop(wxdat_t *wxdp)
     (void)close(s);
     lasthere = now;
     return;
+}
+
+static void
+wxsendaeris(wxdat_t *wxdp)
+{
+    struct tm *tm;
+    char str[2048];
+    char *s;
+
+    if (!*aerisstation || !*aerispassword) {
+        /* if we have no station or password we just log to our CSV file */
+        return;
+    }
+    s = stpcpy(str, "/usr/bin/fetch -q -a -T 3 -o /dev/null 'https://www.pwsweather.com/pwsupdate/pwsupdate.php?");
+    s += sprintf(s, "ID=%s&PASSWORD=%s", aerisstation, aerispassword);
+    s = stpcpy(s, "&dateutc=");
+    tm = gmtime(&wxdp->time);
+    s += strftime(s, 32, "%Y-%m-%d+%H%%3A%M%%3A%S", tm);
+    s += sprintf(s, "&windspeedmph=%d", wxdp->windcur.speed);
+    if (wxdp->windcur.speed != 0) {
+        s += sprintf(s, "&winddir=%d", wxdp->windcur.direction);
+    }
+    s += sprintf(s, "&windgustmph=%d", wxdp->windgust.speed);
+#if 0
+    if (wxdp->windgust.speed != 0) {
+        s += sprintf(s, "&windgustdir=%d", wxdp->windgust.direction);
+    }
+#endif
+    if (WXD_ISVALID(wxdp->outdoortemp)) {
+        s += sprintf(s, "&tempf=%.1f", WXD_GETDAT(wxdp->outdoortemp, floatd));
+    }
+    if (WXD_ISVALID(wxdp->rainrate)) {
+        s += sprintf(s, "&rainin=%.2f", WXD_GETDAT(wxdp->rainrate, floatd));
+    }
+    if (WXD_ISVALID(wxdp->rainday)) {
+        s += sprintf(s, "&dailyrainin=%.2f", WXD_GETDAT(wxdp->rainday, floatd));
+    }
+    if (WXD_ISVALID(wxdp->barometer)) {
+        s += sprintf(s, "&baromin=%.3f", WXD_GETDAT(wxdp->barometer, floatd));
+    }
+    if (WXD_ISVALID(wxdp->outdoorhum)) {
+        s += sprintf(s, "&humidity=%.0f", WXD_GETDAT(wxdp->outdoorhum, floatd));
+    }
+    if (WXD_ISVALID(wxdp->outdoordewpoint)) {
+        s += sprintf(s, "&dewptf=%.1f", WXD_GETDAT(wxdp->outdoordewpoint, floatd));
+    }
+    if (WXD_ISVALID(wxdp->solar)) {
+        s += sprintf(s, "&solarradiation=%d", WXD_GETDAT(wxdp->solar, intd));
+    }
+    s += sprintf(s, "&softwaretype=fwx%%20v%d.%d&action=updateraw'", VERSION_MAJ, VERSION_MIN);
+/*    sprintf(s, "&action=updateraw'"); */
+#ifdef DEBUG_AERIS
+    printf("\"%s\"\n", str);
+#endif /*DEBUG_AERIS*/
+    (void)system(str);
 }
 
 static int
